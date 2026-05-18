@@ -1,0 +1,27 @@
+# EXAMPLE YAML code AUTOMATION in Home Assistant.
+
+alias: POOLEN SENSOR BLUECONNECT - Trigger FUNCTION Read Data Schedule 1
+description: "Schedule Timestamps to when to read data from the Blueconnect Unit"
+mode: single
+triggers:
+  - at: "05:59:00"
+    trigger: time
+  - at: "11:59:00"
+    trigger: time
+  - at: "17:59:00"
+    trigger: time
+  - at: "20:59:00"
+    trigger: time
+conditions:
+  - condition: state
+    entity_id: switch.esphome_web_4e2644_blue_connect_xxx_enable
+    state: "off"
+    for:
+      hours: 0
+      minutes: 2
+      seconds: 0
+actions:
+  - data: {}
+    target:
+      entity_id: switch.esphome_web_4e2644_blue_connect_xxx_enable
+    action: switch.xxx
