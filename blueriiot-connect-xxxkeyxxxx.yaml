@@ -1,0 +1,190 @@
+# This is the setup I have used (specifics ids taken out) Make sure to enter your specifics to your unit and how you want the code.
+# You need to have your units Service UUID to connec to your specific  
+# This can be received by using a specific Bluetooth scanner app. Usally availible on Android, Google Play Store. 
+# Make sure to place the ESP32 unit with bluetooth near your pool where the Blueriiot unit is for good connection. This to avoid disruption in the readings.
+# Readings are triggered by a Automation setup in Home Assistant
+# Remember that the app and readings from the ESP cant be done at the same time. Only one connection at the time.
+# To present the data on UI lovelace Home Assistant there is a custom card in HACS called pool-monitor-card https://github.com/wilsto/pool-monitor-card
+
+# Make changes that you want to be working with your system
+
+# Substitution for BlueRiiot Blue Connect Unit: Poolen
+substitutions:
+  name: blueriiot-connect-xxx
+  friendly_name: BlueRiiot Connect xxxKEYxx
+  mac_id_prefix: XX:XX:XX:XX:XX:XX
+  blueriiot_name_prefix: blueriiotconnect
+  blueriiot_id_prefix: riiot
+
+# ENTER YOUR UNITS SPECIFIC UUID
+  # send true 0x01 to this service ID
+
+  blueriiot_send_service_uuid: 'F3300001-F0A2-9B06-0C59-XXxxXXxxXXxx'
+  blueriiot_send_characteristic_uuid: 'F3300002-F0A2-9B06-0C59-XXxxXXxxXXxx'
+  
+  # notification is recieved on this Service ID                  
+  blueriiot_recieve_service_uuid: 'F3300001-F0A2-9B06-0C59-XXxxXXxxXXxx'
+  blueriiot_recieve_characteristic_uuid: 'F3300003-F0A2-9B06-0C59-XXxxXXxxXXxx'
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  #board: wt32-eth01
+  #board: esp32dev
+  board: esp32-poe-iso
+  framework:
+    type: arduino
+
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: 
+
+# A static IP is to prefer. It might be easy to not use a static IP during the first setup of the ESP32 before this mod is added.
+# Set your credentials and IP, gateway and subnet in your network
+wifi:
+  ssid: !secret wifi_iot_ssid
+  password: !secret wifi_iot_password
+  manual_ip:
+      static_ip: 192.168.0.xxx
+      gateway: 192.168.0.x
+      subnet: 255.255.255.0
+   
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+
+  ap:
+    ssid: "Esph-blueriiot-connect"
+    password: "enterApassword12345"
+
+esp32_ble_tracker:
+
+# Ble Tracker and Ble Client for BlueRiiot Blue Connect Unit: Poolen
+ble_client:
+  - mac_address: ${blueriiot_id_prefix}
+    id: ble_client_${mac_id_prefix}
+    on_connect: 
+      then:
+        - lambda: "id(binary_sensor_$riiot_connected).publish_state(true);"
+        - delay: 2s
+        - button.press: button_${blueriiot_id_prefix}_doreading
+    on_disconnect: [lambda: "id(binary_sensor_${blueriiot_id_prefix}_connected).publish_state(false);"]
+
+## Switch Template for BlueRiiot Blue Connect Unit: Poolen
+switch:
+  - platform: ble_client
+    ble_client_id: ble_client_${blueriiot_id_prefix}
+    name: "${blueriiot_name_prefix} Enable"
+    id: switch_${blueriiot_id_prefix}_enable
+
+## for BlueRiiot Blue Connect Unit: Poolen
+button:
+  - platform: template
+    id: button_${blueriiot_id_prefix}_doreading
+    name: ${blueriiot_name_prefix} do reading
+    internal: true
+    on_press:
+      then:
+        - ble_client.ble_write:
+            id: ble_client_${blueriiot_id_prefix}
+            service_uuid: ${blueriiot_send_service_uuid}
+            characteristic_uuid: ${blueriiot_send_characteristic_uuid}
+            # A lambda returning an std::vector<uint8_t>.
+            value: !lambda |-
+              return {0x01};
+
+## Sensor xxx for BlueRiiot Blue Connect Unit: Poolen
+# Make changes to Name and variables if 
+# If you make changes to id, make sure it gets reflected in text sensor lambda
+sensor: 
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_water_temperature
+    name: ${blueriiot_name_prefix} Water Temperature
+    # Optional variables:
+    unit_of_measurement: "°C"
+    icon: "mdi:pool-thermometer"
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+  
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_ph
+    name: ${blueriiot_name_prefix} pH
+    # Optional variables:
+    unit_of_measurement: "ph"
+    icon: "mdi:ph"
+    device_class: "ph"
+    state_class: "measurement"
+    accuracy_decimals: 1
+
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_orp
+    name: ${blueriiot_name_prefix} ORP
+    # Optional variables:
+    unit_of_measurement:"mV"
+    icon: "mdi:pool"
+    device_class: "voltage"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_battery
+    name: ${blueriiot_name_prefix} Battery
+    # Optional variables:
+    unit_of_measurement: "%"
+    icon: "mdi:battery-bluetooth-variant"
+    device_class: "battery"
+    state_class: "measurement"
+    accuracy_decimals: 1
+
+## Binary Sensor Template for BlueRiiot Blue Connect Unit: Poolen     
+binary_sensor:
+  - platform: template
+    id: binary_sensor_${blueriiot_id_prefix}_connected
+    name: ${blueriiot_name_prefix} Status
+    device_class: connectivity
+    entity_category: diagnostic
+
+## Text Sensor Template for BlueRiiot Blue Connect Unit: Poolen     
+text_sensor:
+  - platform: ble_client
+    id: ${blueriiot_id_prefix}_reading_data
+    name: ${blueriiot_name_prefix} reading data
+    internal: true
+    ble_client_id: ble_client_${blueriiot_id_prefix}
+    service_uuid: ${blueriiot_recieve_service_uuid}
+    characteristic_uuid: ${blueriiot_recieve_characteristic_uuid}
+    notify: true
+    update_interval: never
+    on_notify:
+      then:
+       lambda: |-
+          std::string rawhex = format_hex_pretty((uint8_t *) x.c_str(), x.size()).c_str();
+          ESP_LOGD("raw_hex", "%s", rawhex.c_str());
+
+          float temperature = (float)((int16_t)(x[2]<< 8) + x[1])/100;
+          ESP_LOGD("temp", "%f", temperature);
+          id(sensor_${blueriiot_id_prefix}_water_temperature).publish_state(temperature);
+              
+          float raw_ph = (float)( (int16_t) (x[4]<< 8) + x[3]) ;
+          float ph = (float)( (int16_t) (2048 - raw_ph)) / 232  + 7 ; 
+          ESP_LOGD("ph", "%f", ph);
+          id(sensor_${blueriiot_id_prefix}_ph).publish_state(ph);
+          
+          float orp = (float)( (int16_t) (x[6]<< 8) + x[5]) / 3.86  - 21.57826;
+          ESP_LOGD("orp", "%f", orp);
+          id(sensor_${blueriiot_id_prefix}_orp).publish_state(orp);
+          
+          float bat = (float)( (int16_t) x[11]);
+          ESP_LOGD("bat", "%f", bat);
+          id(sensor_${blueriiot_id_prefix}_battery).publish_state(bat);
+                   
+          id(switch_${blueriiot_id_prefix}_enable).turn_off()
+
+
+
