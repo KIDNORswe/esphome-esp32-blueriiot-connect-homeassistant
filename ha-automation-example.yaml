@@ -24,4 +24,4 @@ actions:
   - data: {}
     target:
       entity_id: switch.esphome_web_4e2644_blue_connect_xxx_enable
-    action: switch.xxx
+    action: switch.turn_on
